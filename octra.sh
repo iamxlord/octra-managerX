@@ -90,7 +90,7 @@ cleanup_localtunnel() {
     fi
 }
 
-iinstall_wallet_generator() {
+install_wallet_generator() {
     clear
     echo -e "${HGREEN}--- Wallet Generator Installer ---${NC}"
     echo ""
