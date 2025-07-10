@@ -19,6 +19,11 @@ type_text() {
     echo "" 
 }
 
+# --- tunnel for VPS users ---
+LT_PID=""
+LT_URL=""
+LT_PASSWORD_IP=""
+
 MrXintro() {
     clear
     echo ""
@@ -75,7 +80,17 @@ get_ip_address() {
     echo "$ip"
 }
 
-install_wallet_generator() {
+cleanup_localtunnel() {
+    if [ -n "$LT_PID" ]; then
+        echo -e "${HGREEN}Stopping localtunnel (PID: $LT_PID)...${NC}"
+        kill "$LT_PID" 2>/dev/null
+        LT_PID=""
+        LT_URL=""
+        LT_PASSWORD_IP=""
+    fi
+}
+
+iinstall_wallet_generator() {
     clear
     echo -e "${HGREEN}--- Wallet Generator Installer ---${NC}"
     echo ""
@@ -96,43 +111,112 @@ install_wallet_generator() {
     echo -e "${HGREEN}Cloning Octa Wallet Generator repository...${NC}"
     if [ -d "wallet-gen" ]; then
         echo -e "${YELLOW}Wallet-gen directory already exists. Pulling latest changes...${NC}"
-        cd wallet-gen
+        cd wallet-gen || { echo -e "${RED}Failed to change directory to wallet-gen!${NC}"; read -n 1 -s; return; }
         git pull
     else
-        git clone https://github.com/octra-labs/wallet-gen.git
-        cd wallet-gen
+        git clone https://github.com/octra-labs/wallet-gen.git || { echo -e "${RED}Failed to clone wallet-gen repository!${NC}"; read -n 1 -s; return; }
+        cd wallet-gen || { echo -e "${RED}Failed to change directory to wallet-gen!${NC}"; read -n 1 -s; return; }
     fi
 
     echo -e "${HGREEN}Installing project dependencies with Bun...${NC}"
-    bun install
+    bun install || { echo -e "${RED}Bun install failed!${NC}"; read -n 1 -s; cd ..; return; }
 
     echo -e "${HGREEN}Adding tweetnacl manually if needed...${NC}"
-    bun add tweetnacl
+    bun add tweetnacl || { echo -e "${YELLOW}bun add tweetnacl failed, might not be critical.${NC}"; }
 
     echo -e "${HGREEN}Allowing port 8888 through UFW...${NC}"
     sudo ufw allow 8888
 
     echo -e "${HGREEN}Starting the wallet generator...${NC}"
     ./wallet-generator.sh &
-    local PID=$!
+    local WALLET_GEN_PID=$!
     sleep 5
-
     echo -e "${DEEP_GREEN}Wallet generator installed successfully and running!${NC}"
     echo ""
 
-    local ip_address=$(get_ip_address)
-    local wallet_url=""
+    local user_ip_address=$(get_ip_address)
+    local displayed_url=""
 
-    if [ -z "$ip_address" ]; then
-        wallet_url="http://127.0.0.1:8888"
-        echo -e "${YELLOW}Could not determine public IP. Assuming local PC.${NC}"
-    else
-        wallet_url="http://${ip_address}:8888"
+    echo -e "${HGREEN}Are you a VPS user? (Y/N)${NC}"
+    read -n 1 -r response_vps
+    echo ""
+
+    if [[ "$response_vps" =~ ^[Yy]$ ]]; then
+        echo -e "${HGREEN}Setting up localtunnel for VPS access...${NC}"
+
+        if ! command -v node &>/dev/null; then
+            echo -e "${HGREEN}Node.js not found. Installing Node.js 22.x...${NC}"
+            sudo apt update
+            sudo curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+            sudo apt install -y nodejs || { echo -e "${RED}Failed to install Node.js!${NC}"; read -n 1 -s; kill "$WALLET_GEN_PID" 2>/dev/null; cd ..; return; }
+        else
+            echo -e "${DEEP_GREEN}Node.js already installed.${NC}"
+        fi
+        node -v
+
+        if ! command -v yarn &>/dev/null; then
+            echo -e "${HGREEN}Installing Yarn...${NC}"
+            sudo npm install -g yarn || { echo -e "${RED}Failed to install Yarn!${NC}"; read -n 1 -s; kill "$WALLET_GEN_PID" 2>/dev/null; cd ..; return; }
+        else
+            echo -e "${DEEP_GREEN}Yarn already installed.${NC}"
+        fi
+        yarn -v
+
+        if ! command -v lt &>/dev/null; then
+            echo -e "${HGREEN}Installing localtunnel...${NC}"
+            sudo npm install -g localtunnel || { echo -e "${RED}Failed to install localtunnel!${NC}"; read -n 1 -s; kill "$WALLET_GEN_PID" 2>/dev/null; cd ..; return; }
+        else
+            echo -e "${DEEP_GREEN}localtunnel already installed.${NC}"
+        fi
+
+        echo -e "${HGREEN}Starting localtunnel for port 8888...${NC}"
+        
+        local LT_TEMP_OUTPUT=$(mktemp)
+        lt --port 8888 > "$LT_TEMP_OUTPUT" 2>&1 &
+        LT_PID=$!
+
+        local max_attempts=15
+        for (( i=0; i<max_attempts; i++ )); do
+            sleep 1
+            LT_URL=$(grep -oE 'https?://[^ ]+\.loca\.lt' "$LT_TEMP_OUTPUT" | head -n 1)
+            if [ -n "$LT_URL" ]; then
+                break
+            fi
+            echo -n "."
+        done
+        echo ""
+
+        if [ -z "$LT_URL" ]; then
+            echo -e "${RED}Failed to get localtunnel URL after several attempts. Check localtunnel output in $LT_TEMP_OUTPUT.${NC}"
+            kill "$LT_PID" 2>/dev/null 
+            LT_PID="" # Clear PID as it failed
+            rm "$LT_TEMP_OUTPUT"
+            # Fallback to local URL
+            displayed_url="http://127.0.0.1:8888"
+            echo -e "${YELLOW}Proceeding with local URL. You might need to configure firewall rules manually.${NC}"
+        else
+            displayed_url="$LT_URL"
+            LT_PASSWORD_IP="$user_ip_address" # Store the IP for password display
+            echo -e "${DEEP_GREEN}Localtunnel URL successfully generated!${NC}"
+        fi
+        rm "$LT_TEMP_OUTPUT" # Clean up the temporary file
+
+    else # Not a VPS user, or localtunnel failed to get URL
+        if [ -z "$user_ip_address" ]; then
+            displayed_url="http://127.0.0.1:8888"
+            echo -e "${YELLOW}Could not determine public IP. Assuming local PC.${NC}"
+        else
+            displayed_url="http://${user_ip_address}:8888"
+        fi
     fi
 
     echo -e "${BOLD}${HGREEN}Instructions:${NC}"
     echo -e "${HGREEN}Open your default device browser then copy this URL:${NC}"
-    echo -e "${YELLOW}  $wallet_url ${NC}"
+    echo -e "${YELLOW}  $displayed_url ${NC}"
+    if [[ "$response_vps" =~ ^[Yy]$ && -n "$LT_URL" ]]; then
+        echo -e "${HGREEN}Password: ${BOLD}$LT_PASSWORD_IP${NC}"
+        echo -e "${HGREEN}Input your VPS IP address into the site to proceed.${NC}"
+    fi
     echo ""
     echo -e "${HGREEN}After accessing the URL:${NC}"
     echo -e "${HGREEN}Click “Generate Wallet” on the page. Scroll up, copy everything & save in a secure place! - no keys no entry! 👍${NC}"
@@ -141,9 +225,12 @@ install_wallet_generator() {
     echo ""
 
     read -n 1 -s -p "Press Enter to go back to Menu..."
-    kill $PID 2>/dev/null # Attempt to stop the wallet generator
+    
+    kill "$WALLET_GEN_PID" 2>/dev/null # Attempt to stop the wallet generator
+    cleanup_localtunnel # Call function to clean up localtunnel if it was started
     cd .. # Go back to the main script directory
 }
+
 
 install_octra_cli() {
     clear
@@ -337,6 +424,7 @@ display_menu() {
 }
 
 # --- Main Script Execution ---
+trap cleanup_localtunnel EXIT
 check_sudo_privileges
 MrXintro
 display_menu
