@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# --- Color Definitions ---
 RED='\033[0;31m'         # Error
 YELLOW='\033[0;33m'       # Warning
 DEEP_GREEN='\033[0;32m'   # Success
@@ -9,14 +8,16 @@ NC='\033[0m'             # No Color
 BOLD='\033[1m'           # Bold text
 
 # --- Functions ---
+
 type_text() {
     local text="$1"
     local delay="${2:-0.05}"
+    
     for (( i=0; i<${#text}; i++ )); do
         echo -n "${text:$i:1}"
         sleep "$delay"
     done
-    echo "" 
+    echo ""
 }
 
 MrXintro() {
@@ -36,9 +37,9 @@ MrXintro() {
     echo ""
     sleep 1
     echo -e "${HGREEN}"
-    type_text "Welcome to the Octa Testnet wallet Manager!" 0.09
-    type_text "This script will help you set-up & manage your Octa Testnet Wallet Interactions" 0.04
-    type_text "Script made and parsed with love and Supremacy" 0.1
+    type_text "Welcome to the Octra Testnet wallet Manager!" 0.09
+    type_text "This script will help you set-up & manage your Octra Testnet Wallet Interactions" 0.04
+    type_text "Script parsed with love & Supremacy" 0.1
     echo ""
     type_text "Press any key to continue..." 0.03
     echo -e "${NC}"
@@ -77,7 +78,7 @@ get_ip_address() {
 
 install_wallet_generator() {
     clear
-    echo -e "${HGREEN}--- Wallet Generator Installer ---${NC}"
+    echo -e "${HGREEN}--- Option 1: Wallet Generator Installer ---${NC}"
     echo ""
 
     if ! check_internet_connection; then
@@ -115,7 +116,7 @@ install_wallet_generator() {
     echo -e "${HGREEN}Starting the wallet generator...${NC}"
     ./wallet-generator.sh &
     local PID=$!
-    sleep 5
+    sleep 20
 
     echo -e "${DEEP_GREEN}Wallet generator installed successfully and running!${NC}"
     echo ""
@@ -124,23 +125,28 @@ install_wallet_generator() {
     local wallet_url=""
 
     if [ -z "$ip_address" ]; then
-        wallet_url="http://127.0.0.1:8888"
+        wallet_url="http://127.0.0.1:8888 (personal PC)"
         echo -e "${YELLOW}Could not determine public IP. Assuming local PC.${NC}"
     else
-        wallet_url="http://${ip_address}:8888"
+        wallet_url="http://${ip_address}:8888 (cloud hosted VPS)"
     fi
 
-    echo -e "${BOLD}${HGREEN}Instructions:${NC}"
+    echo -e "${BOLD}${HGREEN}INSTRUCTIONS:${NC}"
     echo -e "${HGREEN}Open your default device browser then copy this URL:${NC}"
     echo -e "${YELLOW}  $wallet_url ${NC}"
     echo ""
     echo -e "${HGREEN}After accessing the URL:${NC}"
     echo -e "${HGREEN}Click “Generate Wallet” on the page. Scroll up, copy everything & save in a secure place! - no keys no entry! 👍${NC}"
+        echo ""
+            read -n 1 -s -p "Press ENTER to ACTIVATE the wallet generator... (This will make it accessible) 👍"
+    echo ""   
+    echo -e "${HGREEN}Wallet generator is now active and accessible via $wallet_url ${NC}"
     echo ""
-    echo -e "${HGREEN}TAKE NOTE: a kill process exist below this point! - make sure you've copied all the necessary info from the wallet generator before proceeding!, To prevent port conflicts on your VM${NC}"
+    echo -e "${HGREEN}TAKE NOTE: This process will be killed when you press the next Enter.${NC}"
+    echo -e "${HGREEN}Make sure you've copied all necessary info from the wallet generator before proceeding!${NC}"
+    read -n 1 -s -p "Press Enter to go back to Menu...."
     echo ""
-
-    read -n 1 -s -p "Press Enter to go back to Menu..."
+    
     kill $PID 2>/dev/null # Attempt to stop the wallet generator
     cd .. # Go back to the main script directory
 }
@@ -232,14 +238,14 @@ launch_cli() {
 
     echo -e "${HGREEN}Launching....${NC}"
     python3 cli.py
-    echo -e "${HGREEN}TAKE NOTE: a kill process exist below this point! - make sure you've done all neccessity before proceeding!, To prevent port conflicts on your VM${NC}"
-    
+
     echo ""
     read -n 1 -s -p "Press Enter to go back to Menu..."
     deactivate 2>/dev/null # Deactivate virtual environment
     cd .. # Go back to the main script directory
 }
 
+# update_all: Updates all installed components
 update_all() {
     clear
     echo -e "${HGREEN}--- Option 4: Update All ---${NC}"
@@ -336,7 +342,6 @@ display_menu() {
     done
 }
 
-# --- Main Script Execution ---
 check_sudo_privileges
 MrXintro
 display_menu
