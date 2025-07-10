@@ -116,7 +116,7 @@ install_wallet_generator() {
     echo -e "${HGREEN}Starting the wallet generator...${NC}"
     ./wallet-generator.sh &
     local PID=$!
-    sleep 20
+    sleep 2
 
     echo -e "${DEEP_GREEN}Wallet generator installed successfully and running!${NC}"
     echo ""
@@ -245,7 +245,72 @@ launch_cli() {
     cd .. # Go back to the main script directory
 }
 
-# update_all: Updates all installed components
+update_component() {
+    local repo_path="$1"
+    local component_name="$2"
+    local post_update_command="$3"
+
+    echo -e "${HGREEN}Checking for ${component_name} updates...${NC}"
+
+    if [ ! -d "$repo_path" ] && [ "$repo_path" != "." ]; then
+        echo -e "${YELLOW}${component_name} directory not found. Skipping update.${NC}"
+        return
+    fi
+
+    (
+        if [ "$repo_path" != "." ]; then
+            cd "$repo_path" || { echo -e "${RED}Error: Could not enter directory $repo_path. Skipping update.${NC}"; exit 1; }
+        fi
+
+        if ! git diff --quiet HEAD &>/dev/null; then
+            echo -e "${YELLOW}Warning: Uncommitted changes detected in ${component_name}.${NC}"
+            echo -e "${YELLOW}Stashing changes before pulling...${NC}"
+            if ! git stash push -m "Pre-update stash by Octra Testnet Wallet Manager" &>/dev/null; then
+                echo -e "${RED}Error: Failed to stash changes in ${component_name}. Skipping update.${NC}"
+                return
+            fi
+            local stashed=true
+        fi
+
+        git fetch &>/dev/null
+        local_head=$(git rev-parse HEAD)
+        remote_head=$(git rev-parse @{u} 2>/dev/null)
+
+        if [ -z "$remote_head" ]; then
+            echo -e "${YELLOW}Could not determine upstream for ${component_name}. Ensure your branch tracks a remote branch. Skipping update check.${NC}"
+            return
+        fi
+
+        if [ "$local_head" != "$remote_head" ]; then
+            echo -e "${YELLOW}New updates available for ${component_name}.${NC}"
+            echo -e "${HGREEN}Pulling latest changes for ${component_name}...${NC}"
+            if git pull; then
+                echo -e "${DEEP_GREEN}${component_name} updated successfully.${NC}"
+
+                if [ -n "$post_update_command" ]; then
+                    echo -e "${HGREEN}Running post-update command for ${component_name}...${NC}"
+                    eval "$post_update_command"
+                fi
+            else
+                echo -e "${RED}Error: Failed to pull updates for ${component_name}.${NC}"
+                echo -e "${RED}Please check for conflicts or connectivity issues. You might need to resolve manually.${NC}"
+            fi
+        else
+            echo -e "${DEEP_GREEN}${component_name} is up to date.${NC}"
+        fi
+
+        if [ "$stashed" = true ]; then
+            echo -e "${HGREEN}Reapplying stashed changes for ${component_name}...${NC}"
+            if git stash pop &>/dev/null; then
+                echo -e "${DEEP_GREEN}Stashed changes reapplied successfully.${NC}"
+            else
+                echo -e "${YELLOW}Warning: Failed to reapply stashed changes in ${component_name}. Conflicts might exist.${NC}"
+                echo -e "${YELLOW}You might need to resolve conflicts manually: cd ${repo_path} && git stash pop${NC}"
+            fi
+        fi
+    )
+}
+
 update_all() {
     clear
     echo -e "${HGREEN}--- Option 4: Update All ---${NC}"
@@ -256,57 +321,12 @@ update_all() {
         return
     fi
 
-    echo -e "${HGREEN}Checking for updates...${NC}"
+    echo -e "${HGREEN}Checking for updates across all components...${NC}"
+    echo ""
 
-    local update_available="false"
-
-    if [ -d "wallet-gen" ]; then
-        type_text "Checking for Wallet Generator updates..." 0.03
-        (cd wallet-gen && git fetch) &>/dev/null
-        if [ "$(cd wallet-gen && git rev-parse HEAD)" != "$(cd wallet-gen && git rev-parse @{u})" ]; then
-            echo -e "${YELLOW}New updates available for Wallet Generator.${NC}"
-            update_available="true"
-        else
-            echo -e "${DEEP_GREEN}Wallet Generator is up to date.${NC}"
-        fi
-    fi
-
-    if [ -d "octra_pre_client" ]; then
-        type_text "Checking for Octra CLI updates..." 0.03
-        (cd octra_pre_client && git fetch) &>/dev/null
-        if [ "$(cd octra_pre_client && git rev-parse HEAD)" != "$(cd octra_pre_client && git rev-parse @{u})" ]; then
-            echo -e "${YELLOW}New updates available for Octra CLI.${NC}"
-            update_available="true"
-        else
-            echo -e "${DEEP_GREEN}Octra CLI is up to date.${NC}"
-        fi
-    fi
-
-    if [ "$update_available" = "true" ]; then
-        echo ""
-        echo -e "${YELLOW}New updates available. Do you want to update now? (y/n)${NC}"
-        read -n 1 -r response
-        echo ""
-        if [[ "$response" =~ ^[Yy]$ ]]; then
-            echo -e "${HGREEN}Updating...${NC}"
-            if [ -d "wallet-gen" ]; then
-                type_text "Updating Wallet Generator..." 0.03
-                (cd wallet-gen && git merge)
-                echo -e "${DEEP_GREEN}Wallet Generator updated.${NC}"
-            fi
-            if [ -d "octra_pre_client" ]; then
-                type_text "Updating Octra CLI..." 0.03
-                (cd octra_pre_client && git merge)
-                (cd octra_pre_client && source venv/bin/activate && pip install -r requirements.txt && deactivate) 2>/dev/null
-                echo -e "${DEEP_GREEN}Octra CLI updated.${NC}"
-            fi
-            echo -e "${DEEP_GREEN}All updates complete.${NC}"
-        else
-            echo -e "${YELLOW}Update skipped.${NC}"
-        fi
-    else
-        echo -e "${DEEP_GREEN}No new updates available.${NC}"
-    fi
+    update_component "." "Octra Manager Script" ""
+    update_component "wallet-gen" "Wallet Generator" "" 
+    update_component "octra_pre_client" "Octra CLI" "source venv/bin/activate && pip install -r requirements.txt && deactivate"
 
     echo ""
     read -n 1 -s -p "Press Enter to go back to Menu..."
