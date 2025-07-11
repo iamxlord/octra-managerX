@@ -91,14 +91,20 @@ sudo ./octra.sh
 
 **Recent Milestone**: Raised $5M in Pre-Seed and Echo rounds!
 
-## Community
-**Join OCTRA DISCORD:**
-[Discord](https://discord.gg/octra)
+## OCTRA Community
+>[Discord](https://discord.gg/octra)
 
-**Follow on X:**
-[Twitter](https://x.com/octra)
+>[Twitter](https://x.com/octra)
 ## 📜 License
 MIT License - See [LICENSE](LICENSE) file for details.
+
+## My Socials
+
+Twitter:
+[@iamxlord](http://x.com/iamxlord) 
+
+Github:
+[@iamxlord](http://github.com/iamxlord)
 
 ## Acknowledgements
 - Octra Labs for the Octa Testnet
