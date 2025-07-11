@@ -93,10 +93,10 @@ sudo ./octra.sh
 
 ## Community
 **Join OCTRA DISCORD:**
-[![Discord](https://img.shields.io/badge/Discord-join-7289DA?style=for-the-badge&logo=discord)](https://discord.gg/octra)
+[Discord](https://discord.gg/octra)
 
 **Follow on X:**
-[![Twitter](https://x.com/octra)]
+[Twitter](https://x.com/octra)
 ## 📜 License
 MIT License - See [LICENSE](LICENSE) file for details.
 
